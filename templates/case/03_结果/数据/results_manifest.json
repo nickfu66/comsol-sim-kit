@@ -1,0 +1,13 @@
+{
+  "_README": [
+    "run_cases.py 聚合有效工况后自动更新本文件。",
+    "每个工况分别保存 main_<case>.mph 与 solved_<case>.mph，并登记路径和 SHA256。"
+  ],
+  "case": "<任务名称>",
+  "generated_at": "",
+  "model_name_pattern": {
+    "main": "01_建模/main_<case>.mph",
+    "solved": "01_建模/solved_<case>.mph"
+  },
+  "cases": []
+}

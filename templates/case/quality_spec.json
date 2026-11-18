@@ -1,0 +1,25 @@
+{
+  "_README": [
+    "空白判据母本：必须由任务书或维护者确认后填写，当前状态不能通过 gate。",
+    "criteria 至少一条有效 blocking=true 判据；未 PASS 即封堵结论。",
+    "每条判据必须填写 id、metric、op、value、unit、blocking、source、category；blocking 必须为布尔值。",
+    "多工况判据 ID 使用 <工况>.<探针ID>，与 run_cases.py 聚合的 values.json 一致。",
+    "category 可填 conservation / mesh / physics / other，不强制任何物理场。",
+    "op 支持 <、<=、>、>=、==、!=；report 只记录且不参与封堵。",
+    "冻结命令：python env/ctl/check.py gate --sim <案例目录> --freeze --emit。",
+    "正式 gate 还需要 values.json 中的完整 provenance、当前 spec_sha256 和全部声明工况验证记录。",
+    "spec_sha256 与 frozen_at 由命令写回，不手工编造。"
+  ],
+  "schema_version": 1,
+  "case": "<任务名称>",
+  "spec_version": "1.0",
+  "frozen_at": "",
+  "spec_sha256": "",
+  "source": {
+    "type": "",
+    "ref": "",
+    "confirmed_by": ""
+  },
+  "criteria": [],
+  "assumed_params": []
+}

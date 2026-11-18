@@ -1,0 +1,12 @@
+# 已验证组合记录，不作为 pip requirements 文件直接安装。
+# 2026-11-18 真机冒烟：最小 Block + FreeTet，16554 单元，保存/加载 exit 0。
+# 该记录不证明其他平台、物理接口或具体任务结果。
+Python=3.11.9
+COMSOL=6.3
+COMSOL_BUILD=290
+mph=1.4.0
+jpype1=1.7.1
+numpy=2.3.4
+
+# 启动目标：Windows / JPype 进程内 standalone。
+# 其他操作系统和 COMSOL 版本需先修改配置并用最小探针验证。

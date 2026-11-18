@@ -1,0 +1,16 @@
+# 复制为 config/config.toml 后按本机修改。真实 config.toml 不会上传。
+comsol_root = "C:/Program Files/COMSOL/COMSOL63/Multiphysics"
+version = "6.3"
+build = 290
+cores = 8
+
+# 相对 comsol_root / jvm_dll / server 均相对项目根目录解析。
+# 非 Windows 或其他安装布局可显式覆盖：
+# jvm_dll = "相对或绝对 JVM 路径"
+# server = "相对或绝对 comsolmphserver 路径"
+
+# 相对路径以项目根目录为基准；仅生成运行状态，不属于公共源码。
+state_dir = ".runtime/comsol_home"
+
+# 可选：你自己合法持有的离线文档目录，不是公共项目依赖。
+documentation_root = ""

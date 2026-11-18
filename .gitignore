@@ -1,0 +1,36 @@
+# 本机真实配置与 COMSOL 状态
+config/config.toml
+.runtime/
+
+# 本地仿真任务：只留在当前电脑，不上传公共仓库
+/SIM[0-9]*_*/
+/README_任务导航.local.md
+
+# 模型、解和恢复文件
+*.mph
+*.mphbin
+*.recovery
+
+# Python 与测试缓存
+__pycache__/
+*.py[cod]
+.coverage
+
+# 日志和临时文件
+*.log
+*.tmp
+*.bak
+
+# 密钥与本机环境
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 本地代理工作区
+.superpowers/
