@@ -12,3 +12,7 @@
 - 改为审计完整 Git 最终索引，默认拒绝未知资产和 templates 中的真实结果。
 - 结果聚合绑定全部声明工况、双模型和 spec 哈希；数组归约显式化，时域枚举改用 MPh inner(dataset)。
 - 三段话术调整为“只做仿真 → 反向更新与整理 → 上传公共改进”，补全跨电脑使用与结果落位说明。
+- 新增 `csol_kit.study_node`：把研究 tag 解析为 mph study 节点，规避 tag 与显示名不一致；`solve` 接受 tag 并自动解析。
+- `api_registry` 新增 `solver` 类别（Study、StudyStep、Variables、Stationary、Parametric、Eigenvalue）。
+- 交接卡补充研究节点引用、`createAutoSequences`、选择集绑定实体维、恒等对、材料必需属性等已验证写法。
+- 运行说明新增 STUDY-004~006、GEOM-005~006、MESH-004~005 通用问题条目。

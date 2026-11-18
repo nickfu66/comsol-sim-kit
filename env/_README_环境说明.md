@@ -46,7 +46,8 @@ python env/_smoke_csol_kit.py --comsol
 | `check_mesh` | 网格单元数必须达到下限，否则抛 CsolError |
 | `check_domains` | 检查几何域数量精确值或下限 |
 | `check_solution` | 检查探测表达式有限；非零检查由调用方显式选择 |
-| `solve` | 先划网格并校验，再求解和有限次重试 |
+| `solve` | 先划网格并校验，再求解和有限次重试；接受研究 tag，内部自动解析为节点 |
+| `study_node` | 把研究 tag 解析为 mph 的 study 节点，规避 tag 与显示名不一致 |
 | `area_avg` / `vol_avg` | 普通面积、体积平均 |
 | `masked_avg` | 掩码区域平均，分母是掩码积分 |
 | `axisym_area` / `axisym_vol` | 二维轴对称平均，自动加入 2πr |
@@ -91,9 +92,13 @@ python env/_smoke_csol_kit.py --comsol
 | GEOM-002 | Java 选择接口出现重载歧义 | 对需要 Java int 的参数使用 JInt；同时确认实体维度 |
 | GEOM-003 | 重建几何后选择、算子或变量失效 | 全链读回并重建失效节点；不要沿用旧对象引用 |
 | GEOM-004 | 绝对容差在不同尺度模型上选不到实体 | 按模型尺度设置容差，并用数量、面积或体积读回验证选择 |
+| GEOM-005 | Explicit 选择写入实体号时报 Illegal input vector illegal entity number | Explicit 没有 entitydim 属性；先用 sel.geom("geom1", 1) 绑定几何与实体维，再 set 实体号 |
+| GEOM-006 | 需要周期/配对边界时，把两侧边界拆成两个选择后编译报找不到目标边界 | 把源与目标边界合并进同一个选择，由 COMSOL 自动配对；不要拆成两个选择 |
 | MESH-001 | mesh.run 没有报错但单元数为零 | 每次 mesh.run 后调用 check_mesh，检查选择与尺寸设置 |
 | MESH-002 | Sweep 厚向层数未生效 | Distribution 应作为 Sweep 子特征；读回类型、子特征和单元数 |
 | MESH-003 | 直接加密导致单元数和耗时失控 | 先只运行 mesh 记录规模，再决定求解时间盒；耗时外推必须留余量 |
+| MESH-004 | 求解报「未定义材料属性 mur」等材料属性缺失 | 折射率属性组只有 n/ki；按物理接口要求显式补 relpermeability、relpermittivity、electricconductivity 等属性组 |
+| MESH-005 | 端口或激励边界编译报「只能放置在外部边界上」 | 端口/PML 等外部边界特征不能与周期条件等内部边界共用实体；用列表推导从候选边界中减去周期边界后再建选择 |
 | NUM-001 | evaluate 返回数组，标量转换失败或被误取最大值 | 使用 ev；转标量必须显式给 reducer 和数据集/inner/outer 口径 |
 | NUM-002 | 一次点采样拼接多个分量导致异常 | 每个分量单独求值；点采样失败与求解失败分开判断 |
 | NUM-003 | 求解后新建的积分或极值算子无法识别 | 在 solve 前创建算子；若后建则重新求解并验证 |
@@ -104,6 +109,9 @@ python env/_smoke_csol_kit.py --comsol
 | STUDY-001 | Time Dependent 的显示名不能创建研究 | 当前注册表使用 Transient；创建后读回研究类型 |
 | STUDY-002 | 按 solver tag 前缀猜测节点，调用空转或取错解 | 枚举并读回节点类型；用非平凡探测值和实际解存储验证求解发生 |
 | STUDY-003 | 时域输出时刻或步进设置不生效 | 输出时刻由 study step 的 tlist 控制；步进属性设置后读回确认 |
+| STUDY-004 | 求解报 Study "std1" does not exist，但研究确实已创建 | model.solve() 按 studies 的显示名查找，不认 tag；显示名默认是本地化名称（如「研究 1」）。用 csol_kit.study_node 解析，或把显示名显式设为 tag |
+| STUDY-005 | 求解报 Study '研究 1' is neither string nor node | label() 返回 Java 字符串，isinstance(str) 为 False；先 str() 规整或直接用 study_node 返回的节点 |
+| STUDY-006 | 研究建好、网格正常，但报 The solution has not been computed | 新建研究后未生成求解器序列；调用 study.createAutoSequences("sol") 后再求解 |
 | SAVE-001 | 加载模型后发现没有解 | 区分求解前和求解后保存；只有求解后保存的模型才包含解数据集 |
 | DATA-001 | 多段或多解存储取数总拿到第一段，或按 std1 tag 过滤为空 | model.datasets() 是显示名；用 enum_entries 的 MPh inner(dataset) 完整索引，不按 tag 猜测，不静默截断 |
 

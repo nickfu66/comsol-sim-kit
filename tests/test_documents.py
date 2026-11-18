@@ -42,6 +42,10 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("python tools/publish.py", third)
         self.assertIn("--yes", third)
         self.assertIn("git diff", third)
+        self.assertIn(
+            '--message "<用户昵称>-<仿真任务名称>-SIM<编号>-<具体改变总结>"', third
+        )
+        self.assertIn("nickfu66-示例任务-SIM14-", third)
 
     def test_readme_defines_maintainer_only_updates_and_download_use(self):
         text = (PROJECT / "README.md").read_text(encoding="utf-8")

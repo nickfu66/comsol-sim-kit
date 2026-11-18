@@ -8,6 +8,8 @@ from __future__ import annotations
 import difflib
 
 _MANUAL = "COMSOL Programming Reference Manual（按安装版本核对）"
+# 真机探针来源标记：物理中立、已读回验证的通用节点类型。
+_PROBE_63 = "真机探针 COMSOL 6.3 build 290（可复用节点类型）"
 
 REGISTRY = {
     "mesh": {
@@ -41,6 +43,14 @@ REGISTRY = {
         name: _MANUAL for name in (
             "Solution", "Mesh", "CutPlane", "CutLine2D", "CutLine3D",
             "CutPoint1D", "CutPoint2D", "CutPoint3D", "Join", "Maximum", "Minimum",
+        )
+    },
+    # solver 序列节点：createAutoSequences 之外手工组织求解器时使用。
+    # 只登记类型名，不含任何研究类型、属性或物理场专属设置。
+    "solver": {
+        name: _PROBE_63 for name in (
+            "Study", "StudyStep", "Variables", "Stationary",
+            "Parametric", "Eigenvalue",
         )
     },
 }

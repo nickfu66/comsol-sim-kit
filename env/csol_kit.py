@@ -21,7 +21,7 @@ import numpy as np
 
 __all__ = [
     "CsolError", "ev", "ev_scalar", "check_mesh", "check_domains",
-    "check_solution", "solve", "area_avg", "vol_avg", "masked_avg",
+    "check_solution", "solve", "study_node", "area_avg", "vol_avg", "masked_avg",
     "axisym_area", "axisym_vol", "mem_gb", "logger", "atomic_write_json",
     "enum_entries", "sha256_file", "sha256_obj", "case_fingerprint",
     "result_is_current", "aggregate_case_results",
@@ -110,11 +110,54 @@ def check_solution(model, probe_exprs, label="solution", verbose=False,
     return results
 
 
+def study_node(model, study="std1"):
+    """把研究 tag 解析为 mph 的 study 节点，供 model.solve() 使用。
+
+    mph 的 model.solve() 只接受节点对象或 studies 下的显示名字符串，
+    不接受 COMSOL 的 study tag。COMSOL 新建研究的显示名默认是本地化名称
+    （例如「研究 1」），与 tag（例如 std1）不同；直接把 tag 传进去会报
+    Study "std1" does not exist，而把 label() 的返回值（Java 字符串）
+    直接传进去会报 neither string nor node。
+
+    本函数先把标签规整为 Python str 再定位节点，调用方无需关心
+    Java 字符串与 Python 字符串的差异。
+
+    :param model: mph 模型对象
+    :param study: 研究 tag，默认 std1
+    :returns: 可传给 model.solve() 的 study 节点
+    :raises CsolError: 该 tag 对应的研究不存在
+    """
+    try:
+        java_study = model.java.study(study)
+        label = str(java_study.label())
+    except Exception as exc:
+        raise CsolError(f"取研究 {study!r} 的显示名失败：{exc}") from exc
+    node = model / "studies" / label
+    if not node.exists():
+        raise CsolError(
+            f"研究 {study!r}（显示名 {label!r}）在 studies 下找不到对应节点；"
+            "确认研究已创建，且显示名未被改写。"
+        )
+    return node
+
+
 def solve(model, mesh, study="std1", log=print, retries=1, retry_wait_s=2.0,
           expect_min_elem=1):
-    """先运行并校验网格，再求解指定研究；仅对求解异常重试。"""
+    """先运行并校验网格，再求解指定研究；仅对求解异常重试。
+
+    study 可以是研究 tag、studies 显示名或节点对象。传 tag 时自动经
+    study_node 解析，避免 mph 按显示名查找导致的 Study ... does not exist。
+    """
     mesh.run()
-    count = check_mesh(mesh, expect_min=expect_min_elem, label=f"{study}/mesh")
+    if isinstance(study, str) and not hasattr(study, "exists"):
+        # 优先把 tag 解析成节点；模型不支持 java/studies 访问时保持原样，
+        # 让 mph 自己按显示名查找（兼容只实现 solve() 的测试替身）。
+        try:
+            study = study_node(model, study)
+        except CsolError:
+            pass
+    label = study.name() if hasattr(study, "name") else str(study)
+    count = check_mesh(mesh, expect_min=expect_min_elem, label=f"{label}/mesh")
     last_error = None
     for attempt in range(retries + 1):
         try:

@@ -54,6 +54,55 @@ selection.set("entitydim", jpype.JInt(2))
 
 重建几何后，原有选择、耦合算子和变量引用可能失效，必须重新读回。
 
+### 3.1 不同选择类型绑定实体维的方式不同
+
+| 选择类型 | 绑定实体维的写法 | 备注 |
+|---|---|---|
+| `Box` | `set("entitydim", jpype.JInt(1))` | 有 `entitydim` 属性 |
+| `Explicit` | `sel.geom("geom1", 1)` | **没有 `entitydim` 属性**；写 `set("entitydim", ...)` 会报「未知属性」 |
+
+`Explicit` 未绑定几何与实体维就写入实体号时，会报
+`Illegal input vector illegal entity number`。正确写法：
+
+```python
+sel = comp.selection().create("sel_both", "Explicit")
+sel.geom("geom1", 1)                      # 先绑定几何与实体维
+sel.set(jpype.JArray(jpype.JInt, 1)(entities))
+```
+
+需要把两个边界选择合并成一个 `Explicit` 选择时，先分别用 `Box` 取实体号，
+再把两个列表拼起来写入——不要建两个选择。
+
+### 3.2 恒等对（Identity Pair）的源与目标
+
+```python
+pair = comp.pair().create("id1", "Identity")
+pair.source().set(source_entities)          # 方法是 source()/destination()
+pair.destination().set(destination_entities)
+```
+
+`PairClient` 的 `source`/`destination` 是**方法**不是属性，必须用 `.set()` 绑定实体。
+
+## 三·补　材料属性
+
+材料的`RefractiveIndex` 属性组只提供 `n` 和 `ki`。电磁波类接口还需要相对磁导率等属性，
+必须显式给出，否则求解报「未定义材料属性 mur」：
+
+```python
+mat = comp.material().create("mat1", "Common")
+pg = mat.propertyGroup().create("RefractiveIndex", "Refractive index")
+pg.set("n", "3.48")
+pg.set("ki", "0")
+mat.propertyGroup("def").set(
+    "relpermeability", ["1", "0", "0", "0", "1", "0", "0", "0", "1"])
+mat.propertyGroup("def").set(
+    "relpermittivity", ["1", "0", "0", "0", "1", "0", "0", "0", "1"])
+mat.propertyGroup("def").set("electricconductivity", ["0"] * 9)
+```
+
+三个 3×3 矩阵都按行展开为 9 元素列表。是否需要哪些属性取决于所用物理接口，
+按接口要求逐项确认，不要默认其他接口也只需要折射率。
+
 ## 四、网格
 
 ```python
@@ -76,6 +125,40 @@ ne = check_mesh(mesh, expect_min=1)
 - solver 子节点 tag 必须枚举并读回类型，不按 `s`、`t` 等前缀猜测。
 - 瞬态是否继承初值必须显式设置并验证，不能依赖默认状态。
 - 求解后必须用实际探测表达式确认结果存在且有限。
+
+### 5.1 研究节点的引用方式（易错）
+
+`model.solve()` 只接受 **studies 下的显示名**或 **mph 节点对象**，**不接受 study tag**：
+
+| 传入 | 结果 |
+|---|---|
+| `"std1"`（tag，默认显示名是本地化的「研究 1」） | 报 `Study "std1" does not exist` |
+| `st.label()`（Java 字符串，`isinstance(str)` 为 False） | 报 `neither string nor node` |
+| `str(st.label())` 或 `model / "studies" / str(st.label())` | 正确 |
+| 把研究显示名显式设为 tag（`st.label("std1")`）后传 `"std1"` | 正确 |
+
+推荐直接用公共函数 `csol_kit.study_node`，它会把标签规整为 Python `str` 再定位节点：
+
+```python
+from csol_kit import study_node
+
+node = study_node(model, "std1")   # 返回可传给 model.solve() 的节点
+model.solve(node)
+```
+
+`csol_kit.solve(model, mesh, study="std1")` 也接受 tag，内部会自动解析。
+
+### 5.2 求解器序列必须显式生成
+
+新建研究后直接求解可能不产生解（`The solution has not been computed`）。研究创建后应显式生成求解器序列：
+
+```python
+study = model.java.study().create("std1")
+study.create("freq", "Frequency")
+study.createAutoSequences("sol")   # 生成求解器序列
+```
+
+### 5.3 求解与探测
 
 ```python
 from csol_kit import check_solution, solve

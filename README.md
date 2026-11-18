@@ -193,8 +193,16 @@ python env/ctl/check.py env
 ```powershell
 python tools/check_public.py
 python tools/publish.py                 # dry-run
-python tools/publish.py --yes --message "说明本次公共改进"
+python tools/publish.py --yes --message "<用户昵称>-<仿真任务名称>-SIM<编号>-<具体改变总结>"
 ```
+
+提交说明命名示例：
+
+```text
+nickfu66-示例任务-SIM14-新增 Sweep 层数读回的通用检查
+```
+
+命名规则：<用户昵称>-<仿真任务名称>-SIM<编号>-<具体改变总结>。它只进入 Git 提交历史，不代表任务结果会被上传；真实模型、结果和日志仍被排除。
 
 `publish.py` 要求当前分支就是目标 `main`，只暂存公共白名单路径，并在 commit 前检查**完整最终索引**和实际 blob 内容。即使历史误跟踪过敏感文件，也会阻止继续发布；删除这些文件后才可以继续。
 

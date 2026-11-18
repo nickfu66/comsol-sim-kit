@@ -54,6 +54,18 @@ class RegistryTests(unittest.TestCase):
         with self.assertRaises(ApiRegistryError):
             register_type("custom_test", "NoSource", "")
 
+    def test_solver_sequence_node_types_are_registered(self):
+        # 真机探针：COMSOL 6.3 solver 序列的通用节点类型，物理中立。
+        for name in ("Study", "StudyStep", "Variables", "Stationary",
+                     "Parametric", "Eigenvalue"):
+            self.assertEqual(assert_type("solver", name), name)
+
+    def test_create_checked_accepts_solver_type_with_source(self):
+        features = FakeFeatures()
+        created = create_checked(features, "s1", "Stationary", "solver")
+        self.assertEqual(created["args"], ("s1", "Stationary"))
+        self.assertIn("探针", lookup("solver", "Stationary")["source"])
+
 
 if __name__ == "__main__":
     unittest.main()

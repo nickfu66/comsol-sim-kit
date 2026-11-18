@@ -30,6 +30,7 @@ from csol_kit import (  # noqa: E402
     sha256_file,
     sha256_obj,
     solve,
+    study_node,
     vol_avg,
 )
 
@@ -152,6 +153,60 @@ class GuardTests(unittest.TestCase):
             enum_entries(model, study="Study 1", max_inner=1)
 
 
+class JavaStudyStub:
+    """模拟 COMSOL study 对象：label() 返回 Java 字符串语义的值。"""
+
+    def __init__(self, label):
+        self._label = label
+
+    def label(self):
+        return self._label
+
+
+class StudyContainerStub:
+    def __init__(self, label, known_tags):
+        self._label = label
+        self._known = known_tags
+
+    def __call__(self, tag):
+        if tag not in self._known:
+            raise RuntimeError(f"未知研究 {tag!r}")
+        return JavaStudyStub(self._label)
+
+
+class NodeStub:
+    def __init__(self, name, exists=True):
+        self._name = name
+        self._exists = exists
+
+    def exists(self):
+        return self._exists
+
+    def name(self):
+        return self._name
+
+    def __truediv__(self, key):
+        # 支持 model / "studies" / label 的链式访问
+        return self
+
+
+class StudyModel:
+    """模拟 mph 模型：model.java.study(tag) 取显示名，model/'studies'/label 取节点。"""
+
+    def __init__(self, label, exists=True, known_tags=("std1",)):
+        self._label = label
+        self._exists = exists
+        self._known = known_tags
+
+    @property
+    def java(self):
+        return type("J", (), {"study": lambda _self, tag: StudyContainerStub(
+            self._label, self._known)(tag)})()
+
+    def __truediv__(self, key):
+        return NodeStub(self._label, self._exists)
+
+
 class SolveAndAverageTests(unittest.TestCase):
     def test_solver_builds_checked_mesh_and_retries(self):
         mesh = FakeMesh(5)
@@ -160,6 +215,22 @@ class SolveAndAverageTests(unittest.TestCase):
         self.assertEqual(count, 5)
         self.assertEqual(mesh.runs, 1)
         self.assertEqual(model.solved, ["std1"])
+
+    def test_study_node_returns_node_not_java_string(self):
+        # 真机现象：st.label() 返回 Java 字符串，直接传给 solve 会报
+        # "neither string nor node"；study_node 必须返回 Node 对象。
+        node = study_node(StudyModel("研究 1"), "std1")
+        self.assertFalse(isinstance(node, str))
+        self.assertTrue(node.exists())
+        self.assertEqual(node.name(), "研究 1")
+
+    def test_study_node_raises_when_node_missing(self):
+        with self.assertRaises(CsolError):
+            study_node(StudyModel("研究 1", exists=False), "std1")
+
+    def test_study_node_raises_when_study_tag_unknown(self):
+        with self.assertRaises(CsolError):
+            study_node(StudyModel("研究 1", known_tags=()), "std1")
 
     def test_weighted_averages_use_correct_denominators(self):
         model = FakeModel({
