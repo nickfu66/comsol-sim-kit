@@ -462,3 +462,153 @@ def aggregate_case_results(data_dir, expected_cases, validator, spec_sha256):
     manifest["cases"] = cases
     atomic_write_json(manifest_path, manifest)
     return payload
+
+
+# ---------------------------------------------------------------------------
+# 三层语义指纹（2026-11-21 新增，源自案例实测教训的通用提炼）
+#
+# 整文件 SHA256 指纹的问题：改编排代码里一个与物理无关的函数，也会作废
+# 全部已完成工况。三层语义指纹把"是否必须重跑"分级：
+#   physics  物理构建层（建模/扫描/几何/执行核心）变 -> 必须重跑 COMSOL
+#   calc     该工况的计算配置（点表/窗口/研究设置）变 -> 只有该工况重跑
+#   postproc 后处理层（派生量计算）变 -> 离线重算即可，不必重跑
+#   编排文件（runner/driver 的调度部分）不进任何层 -> 改它不作废结果
+# ---------------------------------------------------------------------------
+
+
+def layered_fingerprint(physics_files, calc, postproc_files, runtime=None):
+    """生成三层语义指纹。
+
+    physics_files / postproc_files: {名称: 路径}，文件必须存在（缺失抛 CsolError）。
+    calc: 该工况的计算配置 dict（点表、窗口、研究设置等），原样纳入。
+    runtime: 运行环境 dict（COMSOL 版本、NumPy、平台等）。
+    不做任何缓存：这是"是否花几小时重算"的守门人，缓存会漏判。
+    """
+    def digest_files(files):
+        out = {}
+        for name, path in sorted(files.items()):
+            p = Path(path)
+            if not p.is_file():
+                raise CsolError(f"指纹依赖不存在：{p}")
+            out[name] = sha256_file(p)
+        return out
+
+    return {
+        "physics": digest_files(physics_files),
+        "calc": json.loads(json.dumps(calc, sort_keys=True, default=str)),
+        "postproc": digest_files(postproc_files),
+        "runtime": dict(runtime or {}),
+    }
+
+
+def fingerprint_status(old, new):
+    """比较两份三层指纹，返回分级判定：
+    "current" 全同，可跳过；"repost" 仅后处理变，离线重算；
+    "rerun" 物理或计算配置变，必须重跑。
+    旧指纹不是三层结构（整文件哈希时代）时一律 "rerun"，由调用方决定迁移。
+    """
+    if not isinstance(old, dict) or not all(
+            k in old for k in ("physics", "calc", "postproc")):
+        return "rerun"
+    if old.get("physics") != new.get("physics") or old.get("calc") != new.get("calc"):
+        return "rerun"
+    if old.get("postproc") != new.get("postproc") or old.get("runtime") != new.get("runtime"):
+        return "repost"
+    return "current"
+
+
+class ProgressLog:
+    """逐点持久化 + 断点续跑（JSONL，崩溃安全）。
+
+    每算完一点 append 一行并 flush；进程被杀时最多损失正在算的那一点。
+    load 逐行容错：坏行（如截断的末行）跳过并计数，其余进度保留——
+    绝不能因一行损坏清空整表导致全部重算。
+
+    指纹过滤约定：记录带 fp 且与当前 fp 一致 -> 复用；
+    fp 不一致 -> 丢弃（需重算）；无 fp 字段 -> 视为冻结版口径，接受
+    （用于兼容引入 fp 字段之前落盘的历史进度）。
+    """
+
+    def __init__(self, path):
+        self.path = Path(path)
+
+    def append(self, record, fp=None):
+        rec = dict(record)
+        if fp is not None:
+            rec["fp"] = fp
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
+            fh.flush()
+
+    def load(self, fp=None):
+        """返回 {point_key: record}。point_key = 规范化 JSON(point)。"""
+        if not self.path.is_file():
+            return {}
+        try:
+            raw = self.path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return {}
+        out, bad = {}, 0
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+                key = json.dumps(rec["point"], sort_keys=True)
+            except (ValueError, KeyError, TypeError):
+                bad += 1
+                continue
+            if fp is not None:
+                rec_fp = rec.get("fp")
+                if rec_fp is not None and rec_fp != fp:
+                    continue
+            out[key] = rec
+        self.last_bad_lines = bad
+        return out
+
+class SolvePool:
+    """求解去重池：相同 (物理指纹, 计算口径, 几何, 频表) 的求解只做一次。
+
+    「M 任务是验收视图，不是求解单元」——多个验收视图常共用同一物理模型
+    与同一参数点；逐视图建模求解会把相同的解重复算多次。
+    池是**加速缓存**，不是验收数据源：命中只省求解时间，
+    派生量仍由各视图按自己的口径计算；删池即回到逐点求解。
+
+    物理中立：物理指纹由调用方传入（如 layered_fingerprint 的 physics 层），
+    池目录由调用方注入；本类不 import 任何案例模块、不含任何物理常量。
+    键 = sha256(规范化 JSON(physics, calc, geom, freq_list)) 前 24 位；
+    任一要素变化 -> 键变 -> 自动失效重算，不会混口径。
+
+    等价性注意：两次独立求解可能有浮点末位差（并行归约噪声，~1e-12 量级），
+    池命中复用同一份解反而消除该噪声；验证池等价时用数值容差而非逐字节。
+    """
+
+    def __init__(self, directory):
+        self.dir = Path(directory)
+
+    def key(self, physics, calc, geom, freq_list=None):
+        payload = {"physics": physics, "calc": calc,
+                   "geom": geom, "freq_list": freq_list}
+        raw = json.dumps(payload, sort_keys=True, ensure_ascii=False,
+                         default=str)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+    def get(self, key):
+        p = self.dir / (key + ".json")
+        if not p.is_file():
+            return None
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
+    def put(self, key, kind, payload, meta=None):
+        self.dir.mkdir(parents=True, exist_ok=True)
+        rec = {"key": key, "kind": kind, "meta": meta or {}, **payload}
+        p = self.dir / (key + ".json")
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(rec, ensure_ascii=False, default=str),
+                       encoding="utf-8")
+        tmp.replace(p)

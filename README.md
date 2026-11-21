@@ -2,7 +2,8 @@
 
 一个**物理中立、任务书驱动、判据先行**的 COMSOL 仿真工作框架。
 
-本仓库只提供通用方法、运行核心、空白模板、维护工具和离线测试，不包含真实仿真任务、模型、结果或本机配置。
+本仓库只提供通用方法、运行核心、空白模板、维护工具和离线测试，不包含真实仿真任务、模型、结果或本机配置。  
+注意：这是个ai+comsol仿真工作框架，进行全新的comsol仿真任务会导致开头进行大量的探针脚本运行！！！
 
 > **仅下载本项目不会自动得到某个物理任务的仿真结果。** 必须先填写任务书，并由你或 AI 按任务书实现 `model_common.py`，成功求解后才会生成结果。
 
@@ -10,7 +11,7 @@
 
 - 通过 mph + JPype 以进程内 standalone 方式启动 COMSOL，集中管理配置与状态目录。
 - 用 API 注册表和 `create_checked` 防止把 GUI 显示名误当成 Java API 类型。
-- 提供取值、网格/域/解检查、求解重试、加权平均、轴对称权重、日志、原子 JSON、完整时域索引和续跑指纹。
+- 提供取值、网格/域/解检查、求解重试、加权平均、轴对称权重、日志、原子 JSON、完整时域索引、三层语义续跑指纹与逐点断点续跑。
 - 用 `quality_spec.json` 冻结任务书判据；用当前指纹、双模型哈希和完整 provenance 防止陈旧结果通过验收。
 - 从唯一空白模板创建本地案例，分别保存每个工况的模型、日志、数据、图片和证据。
 - 上传前检查公开边界、完整 Git 最终索引和实际文件内容，避免私人任务、配置、凭据或未知资产被误传。
@@ -79,7 +80,7 @@ python tools/new_case.py "任务名称"
 
 在案例目录完成：
 
-1. `任务书_待填写.md`：目标、几何、材料、物理场、边界、研究、工况、输出和判据来源。
+1. `任务书_待填写.md`：目标、几何、材料、物理场、边界、研究、工况、输出和判据来源。正式任务书若另存新文件，须把本模板文件改为一行指针或删除，不留双份。
 2. `quality_spec.json`：每条判据填写 id、metric、op、value、unit、blocking、source、category，至少一条有效 `blocking=true`。
 3. `02_过程代码/case_spec.py`：填写 RESET_PARAMS、CASES 和执行依赖清单。
 4. `02_过程代码/model_common.py`：实现 `build_model`，先应用 RESET_PARAMS，再应用当前工况参数。
@@ -134,16 +135,16 @@ python env/ctl/check.py env
 
 只有完成上述物理建模并成功求解后才会有任务结果。框架本身不包含你的物理答案。
 
-| 结果 | 本地位置 | 产生条件 |
-|---|---|---|
-| 求解前模型 | `SIMxx_任务/01_建模/main_<case>.mph` | 建模成功并保存 |
-| 含解模型 | `SIMxx_任务/01_建模/solved_<case>.mph` | 求解成功并保存 |
-| 运行日志 | `SIMxx_任务/02_过程代码/日志/run_<case>.log` | driver 执行工况 |
-| 单工况原始结果 | `SIMxx_任务/03_结果/数据/工况_<case>.json` | 单工况完成 |
-| 聚合实测值 | `SIMxx_任务/03_结果/数据/values.json` | 所有声明工况当前校验通过 |
-| 模型与结果台账 | `SIMxx_任务/03_结果/数据/results_manifest.json` | 聚合成功 |
-| 验收证据 | `SIMxx_任务/03_结果/数据/证据快照/<时间戳>/` | 执行 gate --bundle --emit |
-| 图片 | `SIMxx_任务/03_结果/图片/` | 任务脚本实际执行图片导出 |
+| 结果      | 本地位置                                      | 产生条件                    |
+| ------- | ----------------------------------------- | ----------------------- |
+| 求解前模型   | `SIMxx_任务/01_建模/main_<case>.mph`          | 建模成功并保存                 |
+| 含解模型    | `SIMxx_任务/01_建模/solved_<case>.mph`        | 求解成功并保存                 |
+| 运行日志    | `SIMxx_任务/02_过程代码/日志/run_<case>.log`      | driver 执行工况             |
+| 单工况原始结果 | `SIMxx_任务/03_结果/数据/工况_<case>.json`        | 单工况完成                   |
+| 聚合实测值   | `SIMxx_任务/03_结果/数据/values.json`           | 所有声明工况当前校验通过            |
+| 模型与结果台账 | `SIMxx_任务/03_结果/数据/results_manifest.json` | 聚合成功                    |
+| 验收证据    | `SIMxx_任务/03_结果/数据/证据快照/<时间戳>/`           | 执行 gate --bundle --emit |
+| 图片      | `SIMxx_任务/03_结果/图片/`                      | 任务脚本实际执行图片导出            |
 
 **图片不是自动产生的**：模板没有假装知道你的物理场和所需图形，需在任务后处理中实现导出。
 
@@ -161,24 +162,24 @@ python env/ctl/check.py env
 
 ## 七、目录与文件职责
 
-| 路径 | 用途 |
-|---|---|
-| `env/` | 公共运行核心、API 守卫、通用函数、质量门禁和运行文档 |
-| `templates/case/` | 唯一空白案例模板，所有新任务从这里生成 |
-| `templates/README_任务导航.template.md` | 本地任务导航的空白范本 |
-| `tools/new_case.py` | 创建顺序编号案例和本地导航，拒绝覆盖 |
-| `tools/check_public.py` | 公开边界、敏感内容和模板产物检查 |
-| `tools/publish.py` | 维护者 dry-run、完整索引检查、提交和推送 |
-| `tests/` | 不依赖 COMSOL 的标准库 unittest 测试 |
-| `config/config.example.toml` | 本机配置范本，不含私人配置 |
-| `requirements.txt / requirements.lock` | 依赖与已验证组合记录 |
-| `CHANGELOG.md` | 公共改进摘要，不记录本地任务 |
+| 路径                                     | 用途                           |
+| -------------------------------------- | ---------------------------- |
+| `env/`                                 | 公共运行核心、API 守卫、通用函数、质量门禁和运行文档 |
+| `templates/case/`                      | 唯一空白案例模板，所有新任务从这里生成          |
+| `templates/README_任务导航.template.md`    | 本地任务导航的空白范本                  |
+| `tools/new_case.py`                    | 创建顺序编号案例和本地导航，拒绝覆盖           |
+| `tools/check_public.py`                | 公开边界、敏感内容和模板产物检查             |
+| `tools/publish.py`                     | 维护者 dry-run、完整索引检查、提交和推送     |
+| `tests/`                               | 不依赖 COMSOL 的标准库 unittest 测试  |
+| `config/config.example.toml`           | 本机配置范本，不含私人配置                |
+| `requirements.txt / requirements.lock` | 依赖与已验证组合记录                   |
+| `CHANGELOG.md`                         | 公共改进摘要，不记录本地任务               |
 
 三层文档分工：
 
 - 本 README：项目和使用流程。
-- [env/_README_环境说明.md](env/_README_环境说明.md)：怎么运行、通用报错怎么解决。
-- [env/HANDOVER_环境交接卡.md](env/HANDOVER_环境交接卡.md)：通用 COMSOL API 怎么写才正确。
+- [env/\_README\_环境说明.md](env/_README_环境说明.md)：怎么运行、通用报错怎么解决。
+- [env/HANDOVER\_环境交接卡.md](env/HANDOVER_环境交接卡.md)：通用 COMSOL API 怎么写才正确。
 
 公共环境只收录**已验证、可复用、物理中立**的内容，扩展门槛见 [能力契约与扩展登记](env/docs/能力契约与扩展登记.md)。
 

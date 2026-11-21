@@ -16,3 +16,10 @@
 - `api_registry` 新增 `solver` 类别（Study、StudyStep、Variables、Stationary、Parametric、Eigenvalue）。
 - 交接卡补充研究节点引用、`createAutoSequences`、选择集绑定实体维、恒等对、材料必需属性等已验证写法。
 - 运行说明新增 STUDY-004~006、GEOM-005~006、MESH-004~005 通用问题条目。
+- 新增 `csol_kit.layered_fingerprint` / `fingerprint_status`：三层语义指纹（物理构建/计算配置/后处理），分级判定 current/repost/rerun，编排文件豁免；替代整文件哈希全一致的老续跑口径。
+- 新增 `csol_kit.ProgressLog`：逐点 JSONL 持久化 + 断点续跑，坏行逐行跳过保留其余，按指纹过滤（无指纹行按冻结版约定接受）；配套离线测试 9 项。
+- 新增 `csol_kit.SolvePool`：求解去重池（物理指纹/计算口径/几何/频表四要素键，原子落盘，损坏条目安全返回 None），物理指纹与目录由调用方注入、物理中立；配套离线测试 5 项（含无案例 import 守卫）。
+- 模板说明文件补收尾要求：_结果说明.md 收尾必填为实际结果说明，_代码说明.md 须随代码演进同步；README 与开工指令明确正式任务书另存后模板任务书改指针或删除、四份说明文件随进度更新。
+- 交接卡补强：网格 Size 先于剖分操作 + 布尔开关传布尔值；有损材料 relpermittivity 取实部、无损对照保留实部；几何量显式 setter 守卫；盒选择余量与全域认领；多点扫描选择集清理；plist 走 Java 研究特征且每次扫描重写；emw.Wav 单位 µm；端口功率用 Pin 归一化；S 参数存复数对；unwrap 采样前提；已解模型只存扫描最后一点；离线取场先插值规则网格。
+- 运行说明新增 RUN-007~009、SCAN-001~003、MESH-006、SAVE-002、POST-001~002 通用条目。
+- `api_registry` 登记 dataset.Grid2D 类型名（创建已实测；属性名未探通，注明不保证属性可用）。

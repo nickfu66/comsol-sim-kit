@@ -43,6 +43,10 @@ REGISTRY = {
         name: _MANUAL for name in (
             "Solution", "Mesh", "CutPlane", "CutLine2D", "CutLine3D",
             "CutPoint1D", "CutPoint2D", "CutPoint3D", "Join", "Maximum", "Minimum",
+            # Grid2D：类型创建已实测（6.3 build 290）；其坐标/分辨率属性名
+            # 未探通（gridx/gridy/x/y/resolution/method 均报 Unknown_property），
+            # 登记类型名不代表属性可用，使用前须自行探针。
+            "Grid2D",
         )
     },
     # solver 序列节点：createAutoSequences 之外手工组织求解器时使用。

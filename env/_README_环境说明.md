@@ -57,6 +57,9 @@ python env/_smoke_csol_kit.py --comsol
 | `enum_entries` | 用 MPh inner(dataset) 枚举完整时间条目；研究用显示名，超限明确报错 |
 | `sha256_file` / `sha256_obj` | 分块文件哈希与规范化 JSON 哈希，避免大型模型内存峰值 |
 | `case_fingerprint` | 工况参数、NumPy/平台/COMSOL 等运行环境和完整执行依赖的续跑指纹 |
+| `layered_fingerprint` / `fingerprint_status` | 三层语义指纹（物理/计算配置/后处理），分级判定 current/repost/rerun；编排文件豁免 |
+| `ProgressLog` | 逐点 JSONL 持久化 + 断点续跑；坏行逐行跳过保留其余；按指纹过滤，无指纹行按冻结版约定接受 |
+| `SolvePool` | 求解去重池：同 (物理指纹,计算口径,几何,频表) 只解一次，原子落盘、损坏条目安全返回 None；物理指纹与目录由调用方注入 |
 | `result_is_current` | 检查状态、完整指纹及 main/solved 双模型路径与哈希 |
 | `aggregate_case_results` | 校验所有声明工况及 spec 哈希，生成带完整 provenance 的 values.json 和 manifest |
 
@@ -114,6 +117,16 @@ python env/_smoke_csol_kit.py --comsol
 | STUDY-006 | 研究建好、网格正常，但报 The solution has not been computed | 新建研究后未生成求解器序列；调用 study.createAutoSequences("sol") 后再求解 |
 | SAVE-001 | 加载模型后发现没有解 | 区分求解前和求解后保存；只有求解后保存的模型才包含解数据集 |
 | DATA-001 | 多段或多解存储取数总拿到第一段，或按 std1 tag 过滤为空 | model.datasets() 是显示名；用 enum_entries 的 MPh inner(dataset) 完整索引，不按 tag 猜测，不静默截断 |
+| RUN-007 | 长扫描前台跑被超时上限打断 | 后台跑 + 逐点落盘（ProgressLog）；中断后按指纹续跑，不从头重算 |
+| RUN-008 | 分块（chunk）跑反而更慢 | 不要 chunk：每块重启客户端与重剖网格会放大固定开销；单进程复用同一 client 顺序跑完全部工况 |
+| RUN-009 | 看护误报卡死或漏报 | 用日志或临时目录 mtime 停止增长判停，不用进程列表；阈值须大于实测最慢单步并留余量 |
+| SCAN-001 | 峰在窗内但线宽/加载 Q 算不出 | 半高交叉点必须落在扫描窗内：算线宽前先检查峰两侧是否都存在低于半高的采样点，缺失则加宽窗口而非加密步长（步长与窗口正交） |
+| SCAN-002 | 参数图峰位漂移大，统一窗口切峰 | 扫描窗口须覆盖全部参数点的预期峰位；峰位漂移大时按各点粗扫实测峰位逐点定窗 |
+| SCAN-003 | 稀疏散点参数图把外推画成内插 | 采样密度不均时不用规则网格平滑插值；改三角剖分只连实测点、屏蔽超长边三角形、标出实测点位置，图注写明各方向实际采样点数 |
+| MESH-006 | 网格尺寸设置不生效（单元数不随 hmax 变） | Size 必须先于剖分操作创建；布尔开关传布尔值不传字符串；set 后读回确认（详见 HANDOVER 四） |
+| SAVE-002 | 离线取场取到的不是目标点 | 已解模型只保存扫描最后一点的解；取场前核对当前参数与目标点一致，不一致只能测最后一点或重跑该点 |
+| POST-001 | 相位/Smith/群延迟无法事后补算 | S 参数保存复数对 [Re,Im]，不只存模；自检模平方与独立反射率机器精度一致 |
+| POST-002 | 粗细扫相位差整 360 度的假象 | unwrap 前提是相邻跳变小于半圈；粗扫欠采样时改主值散点并声明，不给细扫加整圈迁就错误分支 |
 
 ## 六、验收与收尾
 
